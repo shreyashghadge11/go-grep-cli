@@ -12,8 +12,11 @@ import (
 )
 
 var (
-	outputFile string
-	recursive  bool
+	outputFile     string
+	recursive      bool
+	nLinesBefore   bool
+	nLinesAfter    bool
+	countOfMatches bool
 )
 
 const maxOpenFileDescriptors = 1000
@@ -71,6 +74,15 @@ var grepCmd = &cobra.Command{
 			close(quit)
 		}
 	},
+}
+
+func init() {
+	rootCmd.PersistentFlags().StringVarP(&outputFile, "output", "o", "", "Output file to write to")
+	rootCmd.PersistentFlags().BoolVarP(&recursive, "recursive", "r", false, "Search recursively in a directory")
+	rootCmd.PersistentFlags().BoolVarP(&nLinesBefore, "before-context", "A", false, "Print n lines before the match")
+	rootCmd.PersistentFlags().BoolVarP(&nLinesAfter, "after-context", "B", false, "Print n lines after the match")
+	rootCmd.PersistentFlags().BoolVarP(&countOfMatches, "count", "C", false, "Print count of matches")
+	rootCmd.AddCommand(grepCmd)
 }
 
 func (r *Result) writeResultToStdout(resultSyncChannel chan string, quit chan int) {
@@ -156,12 +168,6 @@ func recursiveGrepString(dir string, str string, files *[]string) {
 	}
 }
 
-func init() {
-	rootCmd.PersistentFlags().StringVarP(&outputFile, "output", "o", "", "Output file to write to")
-	rootCmd.PersistentFlags().BoolVarP(&recursive, "recursive", "r", false, "Search recursively in a directory")
-	rootCmd.AddCommand(grepCmd)
-}
-
 func grepString(file string, str string) {
 	fileInfo, err := os.Stat(file)
 	if err != nil {
@@ -194,15 +200,39 @@ func grepString(file string, str string) {
 		}
 	}
 
+	nLinesBeforeArray := []string{}
+	countOfMatchesInFile := 0
+
 	scanner := bufio.NewScanner(file_)
 	for scanner.Scan() {
 		line := scanner.Text()
+		if nLinesBefore {
+			nLinesBeforeArray = append(nLinesBeforeArray, line)
+			if len(nLinesBeforeArray) > 3 {
+				nLinesBeforeArray = nLinesBeforeArray[1:]
+			}
+		}
+
 		if strings.Contains(line, str) {
 			fmt.Println("String found in file ", file, " : ", str)
+			countOfMatchesInFile++
 			if outputFile != "" {
 				outputFile_.WriteString(line)
 				outputFile_.WriteString("\n")
 			}
+			if nLinesBefore {
+				for _, line := range nLinesBeforeArray {
+					fmt.Println(line)
+				}
+			}
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error reading file")
+		return
+	}
+	if countOfMatches {
+		fmt.Println("Count of matches in file ", file, " : ", countOfMatchesInFile)
 	}
 }

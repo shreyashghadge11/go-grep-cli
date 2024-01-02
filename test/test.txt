@@ -1,4 +1,4 @@
 here to get
 the right
-no of words
+no of words lines
 chars and the lines
